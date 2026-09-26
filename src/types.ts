@@ -75,6 +75,8 @@ export interface EntityConfig {
   name: string;
   session: string;
   logo?: string;
+  type?: string;
+  qac?: string;
 }
 
 export interface EntityDashboard {

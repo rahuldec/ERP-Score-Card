@@ -1,187 +1,171 @@
-import { useState } from 'react';
-import { fetchDashboard } from './api';
-import { ENTITIES } from './config';
-import type { EntityDashboard } from './types';
+import { useEffect, useRef, useState } from 'react';
+import { login, fetchAllDashboards } from './api';
+import type { EntityConfig } from './types';
 import EntityCard from './components/EntityCard';
+import type { EntityDashboard } from './types';
+
+const DEFAULT_MOBILE = import.meta.env.VITE_ERP_MOBILE ?? '';
+const DEFAULT_PASSWORD = import.meta.env.VITE_ERP_PASSWORD ?? '';
+const DEFAULT_SESSION = import.meta.env.VITE_DEFAULT_SESSION ?? '2025-26';
 
 export default function App() {
-  const [token, setToken] = useState('');
-  const [inputToken, setInputToken] = useState('');
+  const [session, setSession] = useState(DEFAULT_SESSION);
+  const [sessionInput, setSessionInput] = useState(DEFAULT_SESSION);
   const [dashboards, setDashboards] = useState<EntityDashboard[]>([]);
-  const [fetching, setFetching] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'error'>('all');
+  const tokenRef = useRef('');
+  const entitiesRef = useRef<EntityConfig[]>([]);
 
-  const initDashboards = () =>
-    ENTITIES.map(entity => ({ entity, data: null, error: null, loading: true }));
-
-  const loadData = async (tok: string) => {
-    setFetching(true);
-    setDashboards(initDashboards());
-    const results = await Promise.all(
-      ENTITIES.map(async entity => {
-        try {
-          const data = await fetchDashboard(tok, entity.id, entity.session);
-          return { entity, data, error: null, loading: false };
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Failed to fetch';
-          return { entity, data: null, error: msg, loading: false };
-        }
-      })
-    );
-    setDashboards(results);
-    setLastRefresh(new Date());
-    setFetching(false);
+  const loadData = async (tok: string, entities: EntityConfig[], sess: string) => {
+    setStatus('loading');
+    setDashboards(entities.map(entity => ({ entity, data: null, error: null, loading: true })));
+    await fetchAllDashboards(tok, entities, sess, (entityId, data, error) => {
+      setDashboards(prev => prev.map(d =>
+        d.entity.id === entityId ? { ...d, data, error, loading: false } : d
+      ));
+    });
+    setStatus('done');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const tok = inputToken.trim();
-    if (!tok) return;
-    setToken(tok);
-    loadData(tok);
+  useEffect(() => {
+    (async () => {
+      setStatus('loading');
+      try {
+        const resp = await login(DEFAULT_MOBILE, DEFAULT_PASSWORD);
+        tokenRef.current = resp.token;
+        const entities: EntityConfig[] = resp.entityGroup.map(e => ({
+          id: e.entityId,
+          name: e.displayName || e.name,
+          session: DEFAULT_SESSION,
+          logo: e.logo,
+          type: e.entityType,
+          qac: e.qac,
+        }));
+        entitiesRef.current = entities;
+        await loadData(resp.token, entities, DEFAULT_SESSION);
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : 'Failed to load data');
+        setStatus('error');
+      }
+    })();
+  }, []);
+
+  const handleRefresh = () => {
+    const newSession = sessionInput.trim() || DEFAULT_SESSION;
+    setSession(newSession);
+    loadData(tokenRef.current, entitiesRef.current, newSession);
   };
 
-  const totalStudents = dashboards.reduce((sum, d) => {
-    if (!d.data) return sum;
-    return sum + (d.data.headCount.currentSession[0]?.totalStudents ?? 0);
-  }, 0);
+  const loaded = dashboards.filter(d => !d.loading);
+  const successful = loaded.filter(d => d.data);
+  const failed = loaded.filter(d => d.error);
 
-  const totalActive = dashboards.reduce((sum, d) => {
-    if (!d.data) return sum;
-    return sum + (d.data.awakeDormantCount[0]?.awakeStudents ?? 0);
-  }, 0);
+  const totalStudents = successful.reduce((s, d) => s + (d.data!.headCount.currentSession[0]?.totalStudents ?? 0), 0);
+  const totalActive = successful.reduce((s, d) => s + (d.data!.awakeDormantCount[0]?.awakeStudents ?? 0), 0);
+  const totalNew = successful.reduce((s, d) => s + (d.data!.headCount.currentSession[0]?.newAdmission ?? 0), 0);
+  const totalQueries = successful.reduce((s, d) => s + (d.data!.unresolvedODPayQueries ?? 0), 0);
+  const totalInactive = successful.reduce((s, d) => s + (d.data!.headCount.currentSession[0]?.inactiveStudents ?? 0), 0);
 
-  const totalNew = dashboards.reduce((sum, d) => {
-    if (!d.data) return sum;
-    return sum + (d.data.headCount.currentSession[0]?.newAdmission ?? 0);
-  }, 0);
+  const searchLower = search.toLowerCase();
+  const displayed = dashboards.filter(d => {
+    if (filter === 'error' && !d.error) return false;
+    if (search && !d.entity.name.toLowerCase().includes(searchLower) && !(d.entity as EntityConfig & { qac?: string }).qac?.toLowerCase().includes(searchLower)) return false;
+    return true;
+  });
 
-  const totalQueries = dashboards.reduce((sum, d) => {
-    if (!d.data) return sum;
-    return sum + (d.data.unresolvedODPayQueries ?? 0);
-  }, 0);
+  const loadingCount = dashboards.filter(d => d.loading).length;
+  const progress = dashboards.length > 0 ? Math.round(((dashboards.length - loadingCount) / dashboards.length) * 100) : 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f3f4f6', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Header */}
-      <div style={{ background: '#1e1b4b', color: '#fff', padding: '0 32px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', height: 60, gap: 16 }}>
-          <span style={{ fontSize: 20 }}>🏫</span>
+      <div style={{ background: '#1e1b4b', color: '#fff', padding: '0 24px', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', height: 58, gap: 16, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 22 }}>🏫</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: 0.3 }}>ERP Score Card</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>ERP Score Card</div>
             <div style={{ fontSize: 11, color: '#a5b4fc' }}>Student Overview Dashboard</div>
           </div>
-          {lastRefresh && (
-            <div style={{ marginLeft: 'auto', fontSize: 12, color: '#a5b4fc' }}>
-              Last refreshed: {lastRefresh.toLocaleTimeString()}
-            </div>
-          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              value={sessionInput}
+              onChange={e => setSessionInput(e.target.value)}
+              placeholder="Session (e.g. 2025-26)"
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #4338ca', background: '#312e81', color: '#e0e7ff', fontSize: 13, width: 160 }}
+            />
+            <button onClick={handleRefresh} disabled={status === 'loading'} style={{ padding: '6px 14px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
+              {status === 'loading' ? `Loading ${progress}%` : '🔄 Load'}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 16px' }}>
-        {/* Token form */}
-        {!token ? (
-          <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 480, margin: '80px auto', boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
-            <h2 style={{ margin: '0 0 8px', fontSize: 18, color: '#111827' }}>Enter Auth Token</h2>
-            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6b7280' }}>Paste your JWT token from the ERP system to load student overview data.</p>
-            <form onSubmit={handleSubmit}>
-              <textarea
-                value={inputToken}
-                onChange={e => setInputToken(e.target.value)}
-                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
-                style={{
-                  width: '100%',
-                  height: 100,
-                  padding: 12,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={!inputToken.trim()}
-                style={{
-                  marginTop: 12,
-                  width: '100%',
-                  padding: '12px',
-                  background: '#4f46e5',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Load Dashboard
-              </button>
-            </form>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 16px' }}>
+        {status === 'error' && (
+          <div style={{ background: '#fef2f2', color: '#dc2626', padding: 16, borderRadius: 10, marginBottom: 16 }}>
+            ⚠ {errorMsg}
           </div>
-        ) : (
-          <>
-            {/* Summary bar */}
-            {!fetching && dashboards.some(d => d.data) && (
-              <div style={{ background: '#fff', borderRadius: 12, padding: '16px 24px', marginBottom: 24, display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>Total Students (All Entities)</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>{totalStudents.toLocaleString()}</div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>Active Students</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#059669' }}>{totalActive.toLocaleString()}</div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>New Admissions</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#0891b2' }}>{totalNew.toLocaleString()}</div>
-                </div>
-                {totalQueries > 0 && (
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Unresolved Queries</div>
-                    <div style={{ fontSize: 24, fontWeight: 700, color: '#f59e0b' }}>{totalQueries}</div>
-                  </div>
-                )}
-                <button
-                  onClick={() => loadData(token)}
-                  disabled={fetching}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#f3f4f6',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 8,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    color: '#374151',
-                  }}
-                >
-                  🔄 Refresh
-                </button>
-                <button
-                  onClick={() => { setToken(''); setDashboards([]); }}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#fee2e2',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    color: '#dc2626',
-                  }}
-                >
-                  Change Token
-                </button>
-              </div>
-            )}
+        )}
 
-            {/* Entity cards */}
-            {dashboards.map((ed, i) => (
-              <EntityCard key={i} ed={ed} />
+        {/* Progress bar */}
+        {status === 'loading' && dashboards.length > 0 && (
+          <div style={{ background: '#e0e7ff', borderRadius: 8, height: 6, marginBottom: 16, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#4f46e5', width: `${progress}%`, transition: 'width 0.3s' }} />
+          </div>
+        )}
+
+        {/* Summary */}
+        {successful.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+            {[
+              { label: 'Total Students', value: totalStudents.toLocaleString(), color: '#4f46e5', icon: '🎓' },
+              { label: 'Active', value: totalActive.toLocaleString(), color: '#059669', icon: '✅' },
+              { label: 'New Admissions', value: totalNew.toLocaleString(), color: '#0891b2', icon: '🆕' },
+              { label: 'Inactive', value: totalInactive.toLocaleString(), color: '#dc2626', icon: '❌' },
+              { label: 'Unresolved Queries', value: totalQueries.toLocaleString(), color: '#f59e0b', icon: '⚠' },
+              { label: 'Entities', value: `${successful.length} / ${dashboards.length}`, color: '#7c3aed', icon: '🏢' },
+            ].map(s => (
+              <div key={s.label} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', borderTop: `4px solid ${s.color}`, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{s.icon} {s.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#111827' }}>{s.value}</div>
+              </div>
             ))}
-          </>
+          </div>
+        )}
+
+        {/* Filters */}
+        {dashboards.length > 0 && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search entity..."
+              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, maxWidth: 300 }}
+            />
+            <button onClick={() => setFilter('all')} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: filter === 'all' ? '#4f46e5' : '#e5e7eb', color: filter === 'all' ? '#fff' : '#374151', fontSize: 13, cursor: 'pointer' }}>
+              All ({dashboards.length})
+            </button>
+            {failed.length > 0 && (
+              <button onClick={() => setFilter('error')} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: filter === 'error' ? '#dc2626' : '#fee2e2', color: filter === 'error' ? '#fff' : '#dc2626', fontSize: 13, cursor: 'pointer' }}>
+                Errors ({failed.length})
+              </button>
+            )}
+            <span style={{ fontSize: 13, color: '#6b7280' }}>
+              Session: <b>{session}</b>
+            </span>
+          </div>
+        )}
+
+        {/* Entity cards */}
+        {displayed.map((ed, i) => (
+          <EntityCard key={i} ed={ed} />
+        ))}
+
+        {displayed.length === 0 && status === 'done' && (
+          <div style={{ textAlign: 'center', color: '#9ca3af', padding: 60 }}>No entities match your search.</div>
         )}
       </div>
     </div>

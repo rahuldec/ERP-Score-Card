@@ -57,7 +57,10 @@ export default function EntityCard({ ed }: Props) {
         {entity.logo && <img src={entity.logo} alt="" style={{ height: 40, borderRadius: 6, objectFit: 'contain' }} />}
         <div>
           <h2 style={{ margin: 0, fontSize: 18, color: '#111827' }}>{entity.name}</h2>
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>Session: {entity.session}</span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+            {entity.qac && <span style={{ fontSize: 11, color: '#6b7280' }}>{entity.qac}</span>}
+            {entity.type && <span style={{ fontSize: 11, background: '#e0e7ff', color: '#3730a3', padding: '1px 6px', borderRadius: 10 }}>{entity.type}</span>}
+          </div>
         </div>
         {data.unresolvedODPayQueries > 0 && (
           <span style={{
