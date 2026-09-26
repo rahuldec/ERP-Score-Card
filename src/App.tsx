@@ -61,11 +61,11 @@ export default function App() {
   const successful = loaded.filter(d => d.data);
   const failed = loaded.filter(d => d.error);
 
-  const totalStudents = successful.reduce((s, d) => s + (d.data!.headCount.currentSession[0]?.totalStudents ?? 0), 0);
-  const totalActive = successful.reduce((s, d) => s + (d.data!.awakeDormantCount[0]?.awakeStudents ?? 0), 0);
-  const totalNew = successful.reduce((s, d) => s + (d.data!.headCount.currentSession[0]?.newAdmission ?? 0), 0);
-  const totalQueries = successful.reduce((s, d) => s + (d.data!.unresolvedODPayQueries ?? 0), 0);
-  const totalInactive = successful.reduce((s, d) => s + (d.data!.headCount.currentSession[0]?.inactiveStudents ?? 0), 0);
+  const totalStudents = successful.reduce((s, d) => s + (d.data?.headCount?.currentSession?.[0]?.totalStudents ?? 0), 0);
+  const totalActive = successful.reduce((s, d) => s + (d.data?.awakeDormantCount?.[0]?.awakeStudents ?? 0), 0);
+  const totalNew = successful.reduce((s, d) => s + (d.data?.headCount?.currentSession?.[0]?.newAdmission ?? 0), 0);
+  const totalQueries = successful.reduce((s, d) => s + (d.data?.unresolvedODPayQueries ?? 0), 0);
+  const totalInactive = successful.reduce((s, d) => s + (d.data?.headCount?.currentSession?.[0]?.inactiveStudents ?? 0), 0);
 
   const searchLower = search.toLowerCase();
   const displayed = dashboards.filter(d => {

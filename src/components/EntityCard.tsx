@@ -42,14 +42,29 @@ export default function EntityCard({ ed }: Props) {
     );
   }
 
-  const hc = data.headCount.currentSession[0];
-  const aw = data.awakeDormantCount[0];
+  const hc = data.headCount?.currentSession?.[0];
+  const aw = data.awakeDormantCount?.[0];
+
+  if (!hc) {
+    return (
+      <div style={cardStyle}>
+        <div style={headerStyle}>
+          {entity.logo && <img src={entity.logo} alt="" style={{ height: 40, borderRadius: 6 }} />}
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, color: '#111827' }}>{entity.name}</h2>
+            {entity.qac && <span style={{ fontSize: 11, color: '#6b7280' }}>{entity.qac}</span>}
+          </div>
+        </div>
+        <div style={{ color: '#6b7280', fontSize: 13 }}>No student data for this session.</div>
+      </div>
+    );
+  }
 
   const activeStudents = aw?.awakeStudents ?? 0;
   const dormantStudents = aw?.dormantStudents ?? 0;
   const activePct = hc.totalStudents > 0 ? Math.round((activeStudents / hc.totalStudents) * 100) : 0;
 
-  const totalInactive = hc.inactiveStudents;
+  const totalInactive = hc.inactiveStudents ?? 0;
 
   return (
     <div style={cardStyle}>
