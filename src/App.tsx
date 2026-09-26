@@ -6,7 +6,7 @@ import type { EntityDashboard } from './types';
 
 const DEFAULT_MOBILE = import.meta.env.VITE_ERP_MOBILE ?? '';
 const DEFAULT_PASSWORD = import.meta.env.VITE_ERP_PASSWORD ?? '';
-const DEFAULT_SESSION = import.meta.env.VITE_DEFAULT_SESSION ?? '2025-26';
+const DEFAULT_SESSION = import.meta.env.VITE_DEFAULT_SESSION ?? '2026-27';
 
 export default function App() {
   const [session, setSession] = useState(DEFAULT_SESSION);
