@@ -1,7 +1,5 @@
 import type { DashboardData, EntityConfig } from './types';
 
-const API_BASE = 'https://others-api.odpay.in';
-
 export interface LoginResponse {
   token: string;
   name: string;
@@ -15,12 +13,8 @@ export interface LoginResponse {
   }>;
 }
 
-export async function login(mobile: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mobile, password }),
-  });
+export async function login(): Promise<LoginResponse> {
+  const res = await fetch('/api/login', { method: 'POST' });
   const json = await res.json();
   if (!json.token) throw new Error(json.message || 'Login failed');
   return json as LoginResponse;
@@ -31,10 +25,10 @@ export async function fetchDashboard(
   entityId: string,
   session: string
 ): Promise<DashboardData> {
-  const url = `${API_BASE}/api/getSISDashboard/dashboard?entity=${encodeURIComponent(entityId)}&session=${encodeURIComponent(session)}`;
-  const res = await fetch(url, { headers: { Authorization: token } });
+  const params = new URLSearchParams({ entity: entityId, session, token });
+  const res = await fetch(`/api/dashboard?${params}`);
   const json = await res.json();
-  if (json.message) throw new Error(json.message);
+  if (json.message && !json.headCount) throw new Error(json.message);
   return json as DashboardData;
 }
 

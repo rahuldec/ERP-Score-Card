@@ -4,8 +4,6 @@ import type { EntityConfig } from './types';
 import EntityCard from './components/EntityCard';
 import type { EntityDashboard } from './types';
 
-const DEFAULT_MOBILE = import.meta.env.VITE_ERP_MOBILE ?? '';
-const DEFAULT_PASSWORD = import.meta.env.VITE_ERP_PASSWORD ?? '';
 const DEFAULT_SESSION = import.meta.env.VITE_DEFAULT_SESSION ?? '2026-27';
 
 export default function App() {
@@ -34,7 +32,7 @@ export default function App() {
     (async () => {
       setStatus('loading');
       try {
-        const resp = await login(DEFAULT_MOBILE, DEFAULT_PASSWORD);
+        const resp = await login();
         tokenRef.current = resp.token;
         const entities: EntityConfig[] = resp.entityGroup.map(e => ({
           id: e.entityId,
