@@ -5,6 +5,10 @@ export default async function handler(req, res) {
   const mobile = process.env.VITE_ERP_MOBILE;
   const password = process.env.VITE_ERP_PASSWORD;
 
+  if (!mobile || !password) {
+    return res.status(500).json({ message: 'Server credentials not configured' });
+  }
+
   try {
     const upstream = await fetch('https://others-api.odpay.in/login', {
       method: 'POST',
@@ -12,8 +16,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({ mobile, password }),
     });
     const data = await upstream.json();
-    res.status(upstream.status).json(data);
+    return res.status(upstream.status).json(data);
   } catch (e) {
-    res.status(500).json({ message: e.message });
+    return res.status(500).json({ message: String(e) });
   }
 }

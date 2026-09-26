@@ -9,12 +9,10 @@ export default async function handler(req, res) {
 
   try {
     const url = `https://others-api.odpay.in/api/getSISDashboard/dashboard?entity=${encodeURIComponent(entity)}&session=${encodeURIComponent(session)}`;
-    const upstream = await fetch(url, {
-      headers: { Authorization: token },
-    });
+    const upstream = await fetch(url, { headers: { Authorization: token } });
     const data = await upstream.json();
-    res.status(upstream.status).json(data);
+    return res.status(upstream.status).json(data);
   } catch (e) {
-    res.status(500).json({ message: e.message });
+    return res.status(500).json({ message: String(e) });
   }
 }
