@@ -1,0 +1,25 @@
+name: Daily Fee Alert
+
+on:
+  schedule:
+    - cron: '30 3 * * 1-6'  # 9:00 AM IST (UTC+5:30), Mon–Sat; Sun skipped
+  workflow_dispatch:          # run manually from GitHub Actions tab
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create .env
+        run: |
+          echo "VITE_ERP_MOBILE=${{ secrets.ERP_MOBILE }}" > .env
+          echo "VITE_ERP_PASSWORD=${{ secrets.ERP_PASSWORD }}" >> .env
+          echo "VITE_DEFAULT_SESSION=2026-27" >> .env
+
+      - name: Send fee alert
+        run: node fee-alert.mjs --to customer-success-delight@okiedokiepay.com
